@@ -130,20 +130,23 @@ app.post("/transcribe", upload.single("file"), async (req, res) => {
       `[INFO] Transcribing '${originalName}' lang=${langParam || "auto"} beam=${beamSize}…`
     );
 
-    const transcription = await whisper({
-      filePath: whisperInput,
+    const transcription = await whisper(whisperInput, {
       modelName: MODEL_SIZE,
       language: langParam,
-      options: {
+      whisperOptions: {
         beamSize,
-      },
+      }
     });
 
-    // whisper-node returns: [{ start, end, speech }]
+    // 2. SAFETY CHECK: Ensure transcription isn't undefined or empty before mapping
+    if (!transcription || !Array.isArray(transcription)) {
+      throw new Error("Whisper returned an empty or invalid response.");
+    }
+
     const segments = transcription.map((seg) => ({
-      start: parseFloat(seg.start),
-      end: parseFloat(seg.end),
-      text: seg.speech.trim(),
+      start: parseFloat(seg.start || 0),
+      end: parseFloat(seg.end || 0),
+      text: (seg.speech || "").trim(),
     }));
 
     const fullText = segments.map((s) => s.text).join(" ");
