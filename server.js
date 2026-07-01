@@ -135,7 +135,8 @@ app.post("/transcribe", upload.single("file"), async (req, res) => {
       language: langParam,
       whisperOptions: {
         beamSize,
-      }
+      },
+      shellOptions: { silent: false }
     });
 
     // 2. SAFETY CHECK: Ensure transcription isn't undefined or empty before mapping
