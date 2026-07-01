@@ -116,7 +116,6 @@ async def transcribe(
         full_text = " ".join(s["text"] for s in segments)
 
         log.info("Done — %d segments, %.1fs audio detected", len(segments), info.duration)
-
         return JSONResponse({
             "text": full_text,
             "language": info.language,
