@@ -1,1 +1,15 @@
-/.env.example
+# Dependencies
+node_modules/
+
+# Environment
+.env
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Whisper model cache
+whisper-models/
+
+# Logs
+*.log
