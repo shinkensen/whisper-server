@@ -27,11 +27,14 @@ const util = require("util");
 const execFileAsync = util.promisify(execFile);
 
 // ── Configuration (override via env vars) ───────────────────────────────────
-const MODEL_SIZE = process.env.WHISPER_MODEL || "base"; // tiny|base|small|medium|large-v2|large-v3
+const MODEL_SIZE = process.env.WHISPER_MODEL || "small"; // tiny|base|small|medium|large-v2|large-v3
 const LANGUAGE = process.env.WHISPER_LANGUAGE || "auto"; // language code or "auto"
 const MAX_FILE_MB = parseInt(process.env.MAX_FILE_MB || "50", 10);
 const PORT = parseInt(process.env.PORT || "8000", 10);
-
+const CPU_THREADS = parseInt(
+  process.env.WHISPER_THREADS || os.cpus().length,
+  10
+);
 // ── whisper.cpp binary/model locations (reusing what whisper-node set up) ───
 const WHISPER_CPP_DIR = path.join(
   __dirname,
@@ -106,9 +109,14 @@ async function runWhisperCpp(wavPath, { language, beamSize } = {}) {
   const args = [
     "-m", modelPathFor(MODEL_SIZE),
     "-f", wavPath,
-    "-bs", String(beamSize || 1),
-    "-l", language && language !== "auto" ? language : "auto",
-  ];
+
+    "-t", String(CPU_THREADS),   // <-- all cores
+    "-bs", String(beamSize),
+
+    "-l", language && language !== "auto"
+        ? language
+        : "auto",
+];
 
   const { stdout } = await execFileAsync(WHISPER_BIN, args, {
     cwd: WHISPER_CPP_DIR,
@@ -120,8 +128,26 @@ async function runWhisperCpp(wavPath, { language, beamSize } = {}) {
 
 // ── Endpoints ───────────────────────────────────────────────────────────────
 
-app.get("/health", (req, res) => {
-  res.json({ status: "ok", model: MODEL_SIZE, runtime: "node", modelLoaded });
+app.get("/health",(req,res)=>{
+
+res.json({
+
+status:"ok",
+
+model:MODEL_SIZE,
+
+threads:CPU_THREADS,
+
+memory:process.memoryUsage(),
+
+uptime:process.uptime(),
+
+cpu:os.loadavg(),
+
+cores:os.cpus().length
+
+});
+
 });
 
 app.get("/models", (req, res) => {
@@ -158,8 +184,7 @@ app.post("/transcribe", upload.single("file"), async (req, res) => {
       `[INFO] ${isWav ? "Resampling" : "Converting"} '${originalName}' to WAV (16kHz mono 16-bit)…`
     );
     execSync(
-      `ffmpeg -y -i "${tmpPath}" -ar 16000 -ac 1 -sample_fmt s16 "${wavPath}"`,
-      { stdio: "pipe" }
+      `ffmpeg -threads ${CPU_THREADS} -y -i "${tmpPath}" -ar 16000 -ac 1 -sample_fmt s16 "${wavPath}"`
     );
     whisperInput = wavPath;
   } catch (convErr) {
@@ -171,7 +196,7 @@ app.post("/transcribe", upload.single("file"), async (req, res) => {
 
   try {
     const langParam = req.query.language || (LANGUAGE !== "auto" ? LANGUAGE : undefined);
-    const beamSize = parseInt(req.query.beam_size || "1", 10);
+    const beamSize = parseInt("5", 10);
 
     console.log(
       `[INFO] Transcribing '${originalName}' lang=${langParam || "auto"} beam=${beamSize}…`
